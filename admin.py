@@ -2,15 +2,20 @@ import os
 from dotenv import load_dotenv
 from db_connection import execute_query, fetch_all, fetch_one
 from datetime import datetime
-from logger import log_admin_action  # <-- IMPORT THE LOGGER
+from logger import log_admin_action
+from env_validator import get_safe_env
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Get admin credentials from .env file (safe, not in code!)
-ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
-ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH')
-
+try:
+    ADMIN_USERNAME = get_safe_env('ADMIN_USERNAME', 'admin')
+    ADMIN_PASSWORD_HASH = get_safe_env('ADMIN_PASSWORD_HASH')
+except ValueError as e:
+    print(f"❌ Configuration Error: {str(e)}")
+    ADMIN_USERNAME = None
+    ADMIN_PASSWORD_HASH = None
 
 def is_admin(username, password_hash):
     """Check if user is admin"""

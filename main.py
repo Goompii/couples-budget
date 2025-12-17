@@ -1,3 +1,6 @@
+# 🛡️ Validate environment configuration before app starts
+from env_validator import validate_env_file
+validate_env_file()
 import streamlit as st
 import pandas as pd
 from authentication import login_user, register_user
@@ -662,7 +665,73 @@ else:
         st.write(f"**User ID:** {st.session_state.user_id}")
         
         st.divider()
-        st.subheader("👫 Partner Link")
+        
+        # Pending Invitations Section
+        st.subheader("📬 Pending Invitations")
+        
+        from couple_pairing import get_pending_invitations, accept_invitation, reject_invitation, cancel_invitation
+        
+        pending = get_pending_invitations(st.session_state.user_id)
+        
+        if pending:
+            st.write(f"**You have {len(pending)} pending invitation(s)**")
+            st.divider()
+            
+            for inv in pending:
+                with st.container():
+                    if inv['invitation_type'] == 'Received':
+                        # Invitation received - show accept/reject
+                        st.write(f"📨 **{inv['username']}** ({inv['full_name']}) wants to pair with you")
+                        if inv['couple_name']:
+                            st.caption(f"Couple name: {inv['couple_name']}")
+                        st.caption(f"Sent: {inv['created_at']}")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            if st.button("✅ Accept", key=f"accept_{inv['id']}"):
+                                success, msg = accept_invitation(inv['id'], st.session_state.user_id)
+                                if success:
+                                    st.success(msg)
+                                    new_couple_id = get_couple_id(st.session_state.user_id)
+                                    if new_couple_id:
+                                        st.session_state.couple_id = new_couple_id
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error(msg)
+                        
+                        with col2:
+                            if st.button("❌ Reject", key=f"reject_{inv['id']}"):
+                                success, msg = reject_invitation(inv['id'], st.session_state.user_id)
+                                if success:
+                                    st.success(msg)
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error(msg)
+                    
+                    else:
+                        # Invitation sent - show cancel
+                        st.write(f"📤 Invitation sent to **{inv['username']}** ({inv['full_name']})")
+                        if inv['couple_name']:
+                            st.caption(f"Couple name: {inv['couple_name']}")
+                        st.caption(f"Sent: {inv['created_at']}")
+                        
+                        if st.button("🗑️ Cancel Invitation", key=f"cancel_{inv['id']}"):
+                            success, msg = cancel_invitation(inv['id'], st.session_state.user_id)
+                            if success:
+                                st.success(msg)
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(msg)
+                    
+                    st.divider()
+        else:
+            st.info("No pending invitations")
+        
+        st.divider()
+        st.subheader("👫 Link Partner")
         
         col1, col2 = st.columns(2)
         
@@ -672,7 +741,7 @@ else:
         with col2:
             couple_name = st.text_input("Couple Name (optional)")
         
-        if st.button("🔗 Link Partner"):
+        if st.button("🔗 Send Pairing Request"):
             if partner_username:
                 success, message = send_pairing_request(
                     user1_id=st.session_state.user_id,
@@ -682,27 +751,32 @@ else:
                 
                 if success:
                     st.success(message)
-                    new_couple_id = get_couple_id(st.session_state.user_id)
-                    if new_couple_id:
-                        st.session_state.couple_id = new_couple_id
-                        st.rerun()
+                    time.sleep(2)
+                    st.rerun()
                 else:
                     st.error(message)
             else:
-                st.error("Enter partner username")
+                st.error("❌ Enter partner username")
+        
+        st.divider()
         
         if st.session_state.couple_id:
-            st.divider()
+            st.subheader("✅ Current Partner")
             partner = get_partner_info(st.session_state.couple_id, st.session_state.user_id)
             if partner:
-                st.success(f"✅ Linked with {partner['full_name']}")
+                st.success(f"✅ Linked with **{partner['full_name']}** (@{partner['username']})")
+                st.caption(f"Email: {partner['email']}")
                 
                 if st.button("🔓 Unlink Partner"):
                     success, msg = unpair_couple(st.session_state.couple_id)
                     if success:
                         st.success(msg)
                         st.session_state.couple_id = None
+                        time.sleep(1)
                         st.rerun()
+        else:
+            st.info("💡 You are not currently paired with anyone. Send a pairing request above!")
+
         
     elif menu == "👨‍💼 Admin Panel":
         st.subheader("👨‍💼 Admin Dashboard")

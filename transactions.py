@@ -5,6 +5,10 @@ from datetime import datetime
 def save_transaction(user_id, couple_id, amount, category, description, trans_date, trans_type):
     """Save a transaction to database"""
     try:
+        # 🛡️ VALIDATION 1: Check for positive amount
+        if amount <= 0:
+            return False, "❌ Amount must be greater than 0"
+
         # Check if category exists
         query = "SELECT id FROM categories WHERE couple_id = ? AND category_name = ?"
         category_result = fetch_one(query, (couple_id, category))
@@ -22,6 +26,22 @@ def save_transaction(user_id, couple_id, amount, category, description, trans_da
             category_result = fetch_one(query, (couple_id, category))
             category_id = category_result['id']
         
+        # 🛡️ VALIDATION 2: Check for Duplicates
+        # Prevents adding the exact same transaction twice (Same amount, date, category, description)
+        check_query = """
+        SELECT id FROM transactions 
+        WHERE couple_id = ? 
+        AND category_id = ? 
+        AND amount = ? 
+        AND transaction_date = ? 
+        AND description = ?
+        AND transaction_type = ?
+        """
+        duplicate = fetch_one(check_query, (couple_id, category_id, amount, trans_date, description, trans_type))
+        
+        if duplicate:
+            return False, "⚠️ Duplicate detected! This transaction already exists."
+
         # Save the transaction
         query = "INSERT INTO transactions (couple_id, user_id, category_id, amount, description, transaction_date, transaction_type) VALUES (?, ?, ?, ?, ?, ?, ?)"
         execute_query(query, (couple_id, user_id, category_id, amount, description, trans_date, trans_type))
@@ -63,6 +83,10 @@ def get_user_transactions(couple_id, user_id=None):
 def edit_transaction(user_id, transaction_id, amount, category, description, trans_date, trans_type, couple_id):
     """Edit an existing transaction - USER CAN ONLY EDIT THEIR OWN"""
     try:
+        # 🛡️ VALIDATION: Check for positive amount
+        if amount <= 0:
+            return False, "❌ Amount must be greater than 0"
+
         # SECURITY: Check if this transaction belongs to the user
         query = "SELECT user_id, couple_id FROM transactions WHERE id = ?"
         trans = fetch_one(query, (transaction_id,))
@@ -177,6 +201,10 @@ def get_monthly_total(couple_id, month=None, year=None):
 def save_budget(couple_id, category_name, planned_amount, month, year):
     """Save or update a budget for a category"""
     try:
+        # 🛡️ VALIDATION: Positive budget
+        if planned_amount < 0:
+            return False, "❌ Budget amount cannot be negative"
+
         # Get category id
         query = "SELECT id FROM categories WHERE couple_id = ? AND category_name = ?"
         cat = fetch_one(query, (couple_id, category_name))
