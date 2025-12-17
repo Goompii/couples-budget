@@ -1,6 +1,7 @@
 from db_connection import execute_query, fetch_all, fetch_one
 from datetime import datetime
 
+
 def save_transaction(user_id, couple_id, amount, category, description, trans_date, trans_type):
     """Save a transaction to database"""
     try:
@@ -29,12 +30,13 @@ def save_transaction(user_id, couple_id, amount, category, description, trans_da
     except Exception as e:
         return False, f"❌ Error: {str(e)}"
 
+
 def get_user_transactions(couple_id, user_id=None):
     """Get transactions for a user or couple"""
     try:
         if user_id:
             query = """
-            SELECT t.id, t.amount, t.description, t.transaction_date, t.transaction_type, c.category_name
+            SELECT t.id, t.amount, t.description, t.transaction_date, t.transaction_type, c.category_name, t.user_id
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             WHERE t.couple_id = ? AND t.user_id = ?
@@ -43,7 +45,7 @@ def get_user_transactions(couple_id, user_id=None):
             params = (couple_id, user_id)
         else:
             query = """
-            SELECT t.id, t.amount, t.description, t.transaction_date, t.transaction_type, c.category_name
+            SELECT t.id, t.amount, t.description, t.transaction_date, t.transaction_type, c.category_name, t.user_id
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             WHERE t.couple_id = ?
@@ -56,6 +58,74 @@ def get_user_transactions(couple_id, user_id=None):
     except Exception as e:
         print(f"Error fetching transactions: {str(e)}")
         return []
+
+
+def edit_transaction(user_id, transaction_id, amount, category, description, trans_date, trans_type, couple_id):
+    """Edit an existing transaction - USER CAN ONLY EDIT THEIR OWN"""
+    try:
+        # SECURITY: Check if this transaction belongs to the user
+        query = "SELECT user_id, couple_id FROM transactions WHERE id = ?"
+        trans = fetch_one(query, (transaction_id,))
+        
+        if not trans:
+            return False, "❌ Transaction not found"
+        
+        if trans['user_id'] != user_id:
+            return False, "❌ You can only edit your own transactions"
+        
+        # Get or create category
+        query = "SELECT id FROM categories WHERE couple_id = ? AND category_name = ?"
+        category_result = fetch_one(query, (couple_id, category))
+        
+        if category_result:
+            category_id = category_result['id']
+        else:
+            # Create new category
+            category_type = 'expense' if trans_type == 'Expense' else 'income'
+            query = "INSERT INTO categories (couple_id, category_name, category_type) VALUES (?, ?, ?)"
+            execute_query(query, (couple_id, category, category_type))
+            
+            # Get the newly created category id
+            query = "SELECT id FROM categories WHERE couple_id = ? AND category_name = ?"
+            category_result = fetch_one(query, (couple_id, category))
+            category_id = category_result['id']
+        
+        # Update the transaction
+        query = """
+        UPDATE transactions 
+        SET category_id = ?, amount = ?, description = ?, transaction_date = ?, transaction_type = ?
+        WHERE id = ? AND user_id = ?
+        """
+        execute_query(query, (category_id, amount, description, trans_date, trans_type, transaction_id, user_id))
+        
+        return True, "✅ Transaction updated!"
+        
+    except Exception as e:
+        return False, f"❌ Error: {str(e)}"
+
+
+def delete_transaction_user(user_id, transaction_id):
+    """Delete a transaction - USER CAN ONLY DELETE THEIR OWN"""
+    try:
+        # SECURITY: Check if this transaction belongs to the user
+        query = "SELECT user_id FROM transactions WHERE id = ?"
+        trans = fetch_one(query, (transaction_id,))
+        
+        if not trans:
+            return False, "❌ Transaction not found"
+        
+        if trans['user_id'] != user_id:
+            return False, "❌ You can only delete your own transactions"
+        
+        # Delete the transaction
+        query = "DELETE FROM transactions WHERE id = ? AND user_id = ?"
+        execute_query(query, (transaction_id, user_id))
+        
+        return True, "✅ Transaction deleted!"
+        
+    except Exception as e:
+        return False, f"❌ Error: {str(e)}"
+
 
 def get_category_summary(couple_id, month=None, year=None):
     """Get spending summary by category"""
@@ -80,6 +150,7 @@ def get_category_summary(couple_id, month=None, year=None):
         print(f"Error fetching summary: {str(e)}")
         return []
 
+
 def get_monthly_total(couple_id, month=None, year=None):
     """Get total income and expenses for the month"""
     try:
@@ -102,6 +173,7 @@ def get_monthly_total(couple_id, month=None, year=None):
         print(f"Error fetching monthly total: {str(e)}")
         return []
 
+
 def save_budget(couple_id, category_name, planned_amount, month, year):
     """Save or update a budget for a category"""
     try:
@@ -111,6 +183,7 @@ def save_budget(couple_id, category_name, planned_amount, month, year):
         
         if not cat:
             return False, f"Category {category_name} not found"
+
 
         category_id = cat['id']
         month_year = f"{year}-{month:02d}"
@@ -133,6 +206,7 @@ def save_budget(couple_id, category_name, planned_amount, month, year):
     except Exception as e:
         return False, f"❌ Error: {str(e)}"
 
+
 def get_budgets(couple_id, month=None, year=None):
     """Get all budgets for a month"""
     try:
@@ -154,6 +228,7 @@ def get_budgets(couple_id, month=None, year=None):
     except Exception as e:
         print(f"Error fetching budgets: {str(e)}")
         return []
+
 
 def get_budget_vs_actual(couple_id, month=None, year=None):
     """Get budget vs actual spending by category"""

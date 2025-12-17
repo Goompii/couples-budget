@@ -234,37 +234,43 @@ else:
     elif menu == "Add Transaction":
         st.subheader("Add Transaction")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            trans_type = st.selectbox("Type", ["Expense", "Income"])
-        with col2:
-            amount = st.number_input("Amount", min_value=0.0, step=0.01)
-        
-        category = st.selectbox("Category", list(DEFAULT_CATEGORIES.keys()))
-        description = st.text_area("Description (optional)")
-        trans_date = st.date_input("Date", datetime.date.today())
-        
-        if st.button("Save Transaction"):
-            if amount > 0 and category:
-                if not st.session_state.couple_id:
-                    st.session_state.couple_id = st.session_state.user_id
-                
-                success, message = save_transaction(
-                    user_id=st.session_state.user_id,
-                    couple_id=st.session_state.couple_id,
-                    amount=amount,
-                    category=category,
-                    description=description,
-                    trans_date=trans_date,
-                    trans_type=trans_type
-                )
-                
-                if success:
-                    st.success(message)
+        with st.form("add_transaction_form", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                trans_type = st.selectbox("Type", ["Expense", "Income"], key="add_trans_type")
+            with col2:
+                amount = st.number_input("Amount", min_value=0.0, step=0.01, key="add_trans_amount")
+            
+            category = st.selectbox("Category", list(DEFAULT_CATEGORIES.keys()), key="add_trans_category")
+            description = st.text_area("Description (optional)", key="add_trans_desc")
+            trans_date = st.date_input("Date", datetime.date.today(), key="add_trans_date")
+            
+            submitted = st.form_submit_button("Save Transaction", use_container_width=True)
+            
+            if submitted:
+                if amount > 0 and category:
+                    if not st.session_state.couple_id:
+                        st.session_state.couple_id = st.session_state.user_id
+                    
+                    success, message = save_transaction(
+                        user_id=st.session_state.user_id,
+                        couple_id=st.session_state.couple_id,
+                        amount=amount,
+                        category=category,
+                        description=description,
+                        trans_date=trans_date,
+                        trans_type=trans_type
+                    )
+                    
+                    if success:
+                        st.success(message)
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error(message)
                 else:
-                    st.error(message)
-            else:
-                st.error("Please fill in all fields")
+                    st.error("Please fill in all fields")
+
     
     elif menu == "View Transactions":
         st.subheader("View Transactions")
@@ -309,6 +315,7 @@ else:
                         success, msg = delete_transaction_user(st.session_state.user_id, trans['id'])
                         if success:
                             st.success(msg)
+                            time.sleep(1)
                             st.rerun()
                         else:
                             st.error(msg)

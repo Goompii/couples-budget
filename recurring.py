@@ -1,5 +1,7 @@
 from db_connection import execute_query, fetch_all, fetch_one
 from datetime import datetime, timedelta
+import calendar
+
 
 
 def save_recurring_transaction(couple_id, category, amount, frequency, next_date, description, status="Active"):
@@ -13,6 +15,7 @@ def save_recurring_transaction(couple_id, category, amount, frequency, next_date
         return True, "✅ Recurring transaction added!"
     except Exception as e:
         return False, f"❌ Error: {str(e)}"
+
 
 
 def get_recurring_transactions(user_or_couple_id):
@@ -30,6 +33,7 @@ def get_recurring_transactions(user_or_couple_id):
         print(f"Error: {str(e)}")
         return []
 
+
 def update_recurring_status(recurring_id, status):
     """Update recurring transaction status (Active/Paused/Cancelled)"""
     try:
@@ -40,6 +44,7 @@ def update_recurring_status(recurring_id, status):
         return False, f"Error: {str(e)}"
 
 
+
 def delete_recurring_transaction(recurring_id):
     """Delete a recurring transaction"""
     try:
@@ -48,6 +53,7 @@ def delete_recurring_transaction(recurring_id):
         return True, "Recurring transaction deleted"
     except Exception as e:
         return False, f"Error: {str(e)}"
+
 
 
 def process_due_recurring_transactions(couple_id):
@@ -93,27 +99,78 @@ def process_due_recurring_transactions(couple_id):
         return 0
 
 
+
 def calculate_next_date(current_date, frequency):
-    """Calculate next due date based on frequency"""
-    current = datetime.strptime(current_date, '%Y-%m-%d')
-    
-    if frequency == 'Weekly':
-        next_date = current + timedelta(days=7)
-    elif frequency == 'Bi-weekly':
-        next_date = current + timedelta(days=14)
-    elif frequency == 'Monthly':
-        if current.month == 12:
-            next_date = current.replace(year=current.year + 1, month=1)
+    """
+    Calculate next due date based on frequency
+    FIXES: Handles month-end dates properly (Jan 31 -> Feb 28/29, not Feb 31)
+    """
+    try:
+        current = datetime.strptime(current_date, '%Y-%m-%d')
+        
+        if frequency == 'Weekly':
+            next_date = current + timedelta(days=7)
+        
+        elif frequency == 'Bi-weekly':
+            next_date = current + timedelta(days=14)
+        
+        elif frequency == 'Monthly':
+            # Handle month-end dates properly
+            year = current.year
+            month = current.month
+            day = current.day
+            
+            # Move to next month
+            if month == 12:
+                year += 1
+                month = 1
+            else:
+                month += 1
+            
+            # Get the last day of the target month
+            last_day_of_month = calendar.monthrange(year, month)[1]
+            
+            # If original day is beyond last day of next month, use last day
+            if day > last_day_of_month:
+                day = last_day_of_month
+            
+            next_date = current.replace(year=year, month=month, day=day)
+        
+        elif frequency == 'Quarterly':
+            # Add 3 months properly
+            year = current.year
+            month = current.month + 3
+            day = current.day
+            
+            # Handle year rollover
+            if month > 12:
+                year += 1
+                month -= 12
+            
+            # Handle month-end dates in quarterly
+            last_day_of_month = calendar.monthrange(year, month)[1]
+            if day > last_day_of_month:
+                day = last_day_of_month
+            
+            next_date = current.replace(year=year, month=month, day=day)
+        
+        elif frequency == 'Yearly':
+            # Handle leap year for Feb 29
+            try:
+                next_date = current.replace(year=current.year + 1)
+            except ValueError:
+                # If Feb 29 and next year isn't leap year, use Feb 28
+                next_date = current.replace(year=current.year + 1, day=28)
+        
         else:
-            next_date = current.replace(month=current.month + 1)
-    elif frequency == 'Quarterly':
-        next_date = current + timedelta(days=90)
-    elif frequency == 'Yearly':
-        next_date = current.replace(year=current.year + 1)
-    else:
-        next_date = current
+            next_date = current
+        
+        return next_date.strftime('%Y-%m-%d')
     
-    return next_date.strftime('%Y-%m-%d')
+    except Exception as e:
+        print(f"Error calculating next date: {str(e)}")
+        return current_date  # Return current date if error
+
 
 
 def get_upcoming_subscriptions(couple_id, days_ahead=30):
@@ -133,6 +190,7 @@ def get_upcoming_subscriptions(couple_id, days_ahead=30):
     except Exception as e:
         print(f"Error: {str(e)}")
         return []
+
 
 
 def get_monthly_subscription_cost(couple_id):
@@ -159,6 +217,10 @@ def get_monthly_subscription_cost(couple_id):
                 monthly_total += item['amount'] * 2.17  # Average bi-weeks per month
             elif item['frequency'] == 'Monthly':
                 monthly_total += item['amount']
+            elif item['frequency'] == 'Quarterly':
+                monthly_total += (item['amount'] / 3)  # Quarterly divided by 3 months
+            elif item['frequency'] == 'Yearly':
+                monthly_total += (item['amount'] / 12)  # Yearly divided by 12 months
         
         return monthly_total
     except Exception as e:
