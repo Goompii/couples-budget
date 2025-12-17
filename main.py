@@ -1,15 +1,17 @@
 import streamlit as st
 import pandas as pd
 from authentication import login_user, register_user
-from transactions import save_transaction, get_user_transactions, get_category_summary, get_monthly_total, save_budget, get_budgets, get_budget_vs_actual
+from transactions import save_transaction, get_user_transactions, get_category_summary, get_monthly_total, save_budget, get_budgets, get_budget_vs_actual, edit_transaction, delete_transaction_user
 from couple_pairing import send_pairing_request, get_couple_id, get_partner_info, unpair_couple
 from db_connection import execute_query, fetch_all, fetch_one
 from config import APP_NAME, DEFAULT_CATEGORIES
 from security import check_session_timeout
-from admin import is_admin, get_all_users, delete_user, get_user_details, get_system_stats, get_all_transactions, delete_transaction
+from admin import is_admin, get_all_users, delete_user, get_user_details, get_system_stats, get_all_transactions, delete_transaction, reset_user_password
 import time
 import datetime
 from reports import export_to_excel
+
+
 
 
 # Page config
@@ -19,6 +21,8 @@ st.set_page_config(
     layout="wide"
 )
 
+
+
 # Initialize session state
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
@@ -27,6 +31,8 @@ if 'logged_in' not in st.session_state:
     st.session_state.couple_id = None
     st.session_state.is_admin = False
     st.session_state.last_activity = None
+
+
 
 # Try to restore session from browser storage
 try:
@@ -39,8 +45,12 @@ except:
     pass
 
 
+
+
 # Title and sidebar
 st.title(f"💰 {APP_NAME}")
+
+
 
 if not st.session_state.logged_in:
     # Login/Register Page
@@ -61,10 +71,14 @@ if not st.session_state.logged_in:
                     st.session_state.user_id = user['id']
                     st.session_state.username = user['username']
 
+
+
                     # Check if admin
                     from security import sanitize_input
                     is_user_admin = (user['username'] == 'admin')
                     st.session_state.is_admin = is_user_admin
+
+
 
                     # Auto-link couple if paired
                     couple_id = get_couple_id(user['id'])
@@ -76,8 +90,12 @@ if not st.session_state.logged_in:
                     st.success(message)
                     st.rerun()
 
+
+
                     # Mark successful login
                     st.session_state.last_activity = datetime.datetime.now()
+
+
 
                 else:
                     st.error(message)
@@ -102,6 +120,8 @@ if not st.session_state.logged_in:
             else:
                 st.warning("Please fill in all fields")
 
+
+
 else:
     # Main App (After Login)
     
@@ -118,7 +138,7 @@ else:
             "View Transactions",
             "Subscriptions",
             "Budgets",
-            "📊 Reports",  # ← Add emoji
+            "📊 Reports",
             "Settings",
             "👨‍💼 Admin Panel"
         ]
@@ -129,11 +149,15 @@ else:
             "View Transactions",
             "Subscriptions",
             "Budgets",
-            "📊 Reports",  # ← Add emoji
+            "📊 Reports",
             "Settings"
         ]
 
+
+
     menu = st.sidebar.radio("Navigation", menu_items)
+
+
 
     
     if st.sidebar.button("Logout"):
@@ -142,6 +166,8 @@ else:
         st.session_state.username = None
         st.session_state.is_admin = False
         st.rerun()
+
+
 
     
     if menu == "Dashboard":
@@ -247,9 +273,11 @@ else:
         
         if transactions:
             st.write(f"**Total Transactions: {len(transactions)}**")
+            st.divider()
             
             for trans in transactions:
-                col1, col2, col3, col4, col5 = st.columns(5)
+                col1, col2, col3, col4, col5, col6, col7 = st.columns([1.5, 1.2, 1.2, 1.2, 1, 0.6, 0.6])
+                
                 with col1:
                     st.write(f"**{trans['transaction_date']}**")
                 with col2:
@@ -263,8 +291,102 @@ else:
                         st.write(f"🔴 -R{trans['amount']}")
                 with col5:
                     st.write(trans['transaction_type'])
+                
+                # Edit Button
+                with col6:
+                    if st.button("✏️", key=f"edit_trans_{trans['id']}", help="Edit"):
+                        st.session_state.edit_trans_id = trans['id']
+                        st.session_state.edit_trans_amount = trans['amount']
+                        st.session_state.edit_trans_category = trans['category_name']
+                        st.session_state.edit_trans_desc = trans['description']
+                        st.session_state.edit_trans_date = trans['transaction_date']
+                        st.session_state.edit_trans_type = trans['transaction_type']
+                        st.session_state.show_edit_form = True
+                
+                # Delete Button
+                with col7:
+                    if st.button("🗑️", key=f"del_trans_{trans['id']}", help="Delete"):
+                        success, msg = delete_transaction_user(st.session_state.user_id, trans['id'])
+                        if success:
+                            st.success(msg)
+                            st.rerun()
+                        else:
+                            st.error(msg)
+                
+                st.divider()
+            
+            # Edit Transaction Form (if edit button clicked)
+            if st.session_state.get('show_edit_form', False):
+                st.subheader("✏️ Edit Transaction")
+                
+                with st.form("edit_transaction_form"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        edit_type = st.selectbox(
+                            "Type", 
+                            ["Expense", "Income"],
+                            index=0 if st.session_state.get('edit_trans_type') == 'Expense' else 1,
+                            key="edit_type"
+                        )
+                    with col2:
+                        edit_amount = st.number_input(
+                            "Amount",
+                            min_value=0.0,
+                            step=0.01,
+                            value=float(st.session_state.get('edit_trans_amount', 0)),
+                            key="edit_amount"
+                        )
+                    
+                    edit_category = st.selectbox(
+                        "Category",
+                        list(DEFAULT_CATEGORIES.keys()),
+                        index=list(DEFAULT_CATEGORIES.keys()).index(st.session_state.get('edit_trans_category', 'Food & Groceries')) if st.session_state.get('edit_trans_category') in DEFAULT_CATEGORIES.keys() else 0,
+                        key="edit_category"
+                    )
+                    
+                    edit_description = st.text_area(
+                        "Description (optional)",
+                        value=st.session_state.get('edit_trans_desc', ''),
+                        key="edit_description"
+                    )
+                    
+                    edit_date = st.date_input(
+                        "Date",
+                        value=datetime.datetime.strptime(st.session_state.get('edit_trans_date', datetime.date.today().isoformat()), '%Y-%m-%d').date() if isinstance(st.session_state.get('edit_trans_date'), str) else datetime.date.today(),
+                        key="edit_date"
+                    )
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.form_submit_button("💾 Save Changes"):
+                            if edit_amount > 0:
+                                success, message = edit_transaction(
+                                    user_id=st.session_state.user_id,
+                                    transaction_id=st.session_state.get('edit_trans_id'),
+                                    amount=edit_amount,
+                                    category=edit_category,
+                                    description=edit_description,
+                                    trans_date=edit_date,
+                                    trans_type=edit_type,
+                                    couple_id=st.session_state.couple_id
+                                )
+                                if success:
+                                    st.success(message)
+                                    st.session_state.show_edit_form = False
+                                    st.rerun()
+                                else:
+                                    st.error(message)
+                            else:
+                                st.error("Amount must be greater than 0")
+                    
+                    with col2:
+                        if st.form_submit_button("❌ Cancel"):
+                            st.session_state.show_edit_form = False
+                            st.rerun()
         else:
             st.info("No transactions yet. Add one in the 'Add Transaction' tab!")
+
+
 
     elif menu == "Subscriptions":
         st.subheader("🔄 Recurring Subscriptions & Payments")
@@ -467,6 +589,8 @@ else:
         else:
             st.info("No expense categories with budgets set yet!")
 
+
+
     
     elif menu == "📊 Reports":
         st.subheader("📊 Monthly Reports & Export")
@@ -640,8 +764,7 @@ else:
                         if st.button("🔐 Reset Password", key=f"btn_reset_pwd_{selected_user_id}"):
                             if new_password and confirm_password:
                                 if new_password == confirm_password:
-                                    from authentication import reset_user_password
-                                    success, msg = reset_user_password(selected_user_id, new_password)
+                                    success, msg = reset_user_password(st.session_state.username, selected_user_id, new_password)
                                     if success:
                                         st.success(msg)
                                     else:
@@ -653,7 +776,7 @@ else:
                     
                     with col2:
                         if st.button("🗑️ Delete This User", key=f"del_user_{selected_user_id}"):
-                            success, msg = delete_user(selected_user_id)
+                            success, msg = delete_user(st.session_state.username, selected_user_id)
                             if success:
                                 st.success(msg)
                                 st.rerun()
@@ -712,7 +835,7 @@ else:
                             
                             with col4:
                                 if st.button("🗑️", key=f"del_trans_{trans['id']}"):
-                                    success, msg = delete_transaction(trans['id'])
+                                    success, msg = delete_transaction(st.session_state.username, trans['id'])
                                     if success:
                                         st.success(msg)
                                         st.rerun()

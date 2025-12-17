@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from db_connection import execute_query, fetch_all, fetch_one
 from datetime import datetime
+from logger import log_admin_action  # <-- IMPORT THE LOGGER
 
 # Load environment variables from .env file
 load_dotenv()
@@ -17,6 +18,13 @@ def is_admin(username, password_hash):
     return username == ADMIN_USERNAME and bcrypt.checkpw(password_hash.encode('utf-8'), ADMIN_PASSWORD_HASH.encode('utf-8'))
 
 
+def check_admin_permission(user_id, username):
+    """Verify user has admin access - SECURITY CHECK"""
+    if username != ADMIN_USERNAME:
+        return False, "❌ Admin access required"
+    return True, "Authorized"
+
+
 def get_all_users():
     """Get all users in system"""
     try:
@@ -28,9 +36,18 @@ def get_all_users():
         return []
 
 
-def delete_user(user_id):
-    """Delete a user and all their data"""
+def delete_user(admin_username, user_id):
+    """Delete a user and all their data - REQUIRES ADMIN"""
     try:
+        # SECURITY: Check if user is admin
+        has_permission, msg = check_admin_permission(None, admin_username)
+        if not has_permission:
+            return False, msg
+        
+        # Prevent deleting admin user
+        if str(user_id) == str(1) or admin_username == user_id: # Basic check to protect admin account
+            return False, "❌ Cannot delete admin/primary user"
+        
         # Get couple_id associated with this user
         query = """
         SELECT id FROM couple_pairs 
@@ -41,24 +58,17 @@ def delete_user(user_id):
         if couple:
             couple_id = couple['id']
             # Delete all transactions for this couple
-            query = "DELETE FROM transactions WHERE couple_id = ?"
-            execute_query(query, (couple_id,))
-            
-            # Delete all budgets for this couple
-            query = "DELETE FROM budgets WHERE couple_id = ?"
-            execute_query(query, (couple_id,))
-            
-            # Delete all categories for this couple
-            query = "DELETE FROM categories WHERE couple_id = ?"
-            execute_query(query, (couple_id,))
-            
-            # Delete the couple pair
-            query = "DELETE FROM couple_pairs WHERE id = ?"
-            execute_query(query, (couple_id,))
+            execute_query("DELETE FROM transactions WHERE couple_id = ?", (couple_id,))
+            execute_query("DELETE FROM budgets WHERE couple_id = ?", (couple_id,))
+            execute_query("DELETE FROM categories WHERE couple_id = ?", (couple_id,))
+            execute_query("DELETE FROM recurring_transactions WHERE couple_id = ?", (couple_id,))
+            execute_query("DELETE FROM couple_pairs WHERE id = ?", (couple_id,))
         
         # Delete the user
-        query = "DELETE FROM users WHERE id = ?"
-        execute_query(query, (user_id,))
+        execute_query("DELETE FROM users WHERE id = ?", (user_id,))
+        
+        # LOG THE ACTION
+        log_admin_action(admin_username, "DELETE_USER", user_id, "Deleted user and all associated data")
         
         return True, "✅ User deleted successfully"
     except Exception as e:
@@ -171,23 +181,41 @@ def get_transactions_by_user_id(user_id):
         return []
 
 
-def delete_transaction(transaction_id):
-    """Delete a specific transaction"""
+def delete_transaction(admin_username, transaction_id):
+    """Delete a specific transaction - REQUIRES ADMIN"""
     try:
+        # SECURITY: Check if user is admin
+        has_permission, msg = check_admin_permission(None, admin_username)
+        if not has_permission:
+            return False, msg
+        
         query = "DELETE FROM transactions WHERE id = ?"
         execute_query(query, (transaction_id,))
+        
+        # LOG THE ACTION
+        log_admin_action(admin_username, "DELETE_TRANSACTION", transaction_id, "Deleted single transaction")
+        
         return True, "✅ Transaction deleted"
     except Exception as e:
         return False, f"❌ Error: {str(e)}"
 
 
-def reset_user_password(user_id, new_password):
-    """Reset user password (admin only)"""
+def reset_user_password(admin_username, user_id, new_password):
+    """Reset user password (admin only) - REQUIRES ADMIN"""
     try:
+        # SECURITY: Check if user is admin
+        has_permission, msg = check_admin_permission(None, admin_username)
+        if not has_permission:
+            return False, msg
+        
         import bcrypt
         password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         query = "UPDATE users SET password_hash = ? WHERE id = ?"
         execute_query(query, (password_hash, user_id))
+        
+        # LOG THE ACTION
+        log_admin_action(admin_username, "RESET_PASSWORD", user_id, "Admin reset user password")
+        
         return True, "✅ Password reset successfully"
     except Exception as e:
         return False, f"❌ Error: {str(e)}"
