@@ -51,18 +51,22 @@ def register_user(username, email, password, full_name):
 
 def login_user(username, password):
     """Login a user and return user info"""
-    query = "SELECT id, username, email, full_name FROM users WHERE username = ?"
+    # Get user info AND password hash in ONE query (not two!)
+    query = "SELECT id, username, email, full_name, password_hash FROM users WHERE username = ?"
     user = fetch_one(query, (username,))
     
     if not user:
         return False, None, "Username not found"
     
-    # Get password hash
-    query = "SELECT password_hash FROM users WHERE username = ?"
-    result = fetch_one(query, (username,))
-    
-    if result and verify_password(password, result['password_hash']):
-        return True, user, "Login successful!"
+    # Verify password
+    if verify_password(password, user['password_hash']):
+        # Return without the password hash (security)
+        return True, {
+            'id': user['id'],
+            'username': user['username'],
+            'email': user['email'],
+            'full_name': user['full_name']
+        }, "Login successful!"
     else:
         return False, None, "Incorrect password"
 

@@ -1,6 +1,6 @@
-streamlit==1.32.0
-streamlit-option-menu==0.3.6
-pandas==2.1.0
-plotly==5.17.0
-bcrypt==4.1.0
-python-dotenv==1.0.0
+streamlit
+streamlit-option-menu
+pandas
+plotly
+bcrypt
+python-dotenv

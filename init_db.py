@@ -80,6 +80,21 @@ CREATE TABLE IF NOT EXISTS shared_accounts (
 )
 ''')
 
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS recurring_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    couple_id INTEGER NOT NULL,
+    category_name TEXT NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    frequency TEXT NOT NULL,
+    next_date DATE NOT NULL,
+    description TEXT,
+    status TEXT DEFAULT 'Active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (couple_id) REFERENCES couple_pairs(id)
+)
+''')
+
 conn.commit()
 conn.close()
 print("✓ Database created successfully!")

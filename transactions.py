@@ -110,9 +110,8 @@ def save_budget(couple_id, category_name, planned_amount, month, year):
         cat = fetch_one(query, (couple_id, category_name))
         
         if not cat:
-            st.error(f"Category {category_name} not found")
-            return False, "Category not found"
-        
+            return False, f"Category {category_name} not found"
+
         category_id = cat['id']
         month_year = f"{year}-{month:02d}"
         

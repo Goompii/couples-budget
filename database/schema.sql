@@ -68,3 +68,17 @@ CREATE TABLE IF NOT EXISTS shared_accounts (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (couple_id) REFERENCES couple_pairs(id)
 );
+
+-- ⚡ DATABASE INDEXES (for performance)
+
+CREATE INDEX IF NOT EXISTS idx_transactions_couple ON transactions(couple_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date);
+
+CREATE INDEX IF NOT EXISTS idx_budgets_couple ON budgets(couple_id);
+
+CREATE INDEX IF NOT EXISTS idx_categories_couple ON categories(couple_id);
+
+CREATE INDEX IF NOT EXISTS idx_couple_pairs_user ON couple_pairs(user1_id, user2_id);
+
+CREATE INDEX IF NOT EXISTS idx_recurring_couple ON recurring_transactions(couple_id);
