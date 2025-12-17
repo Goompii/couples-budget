@@ -1,13 +1,21 @@
+import os
+from dotenv import load_dotenv
 from db_connection import execute_query, fetch_all, fetch_one
 from datetime import datetime
 
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD_HASH = "$2b$12$R9h7cIPz0gi.URNNVZ3IqeIVVQKrm7XZeKrVl5/P.yt1ySa7dVDaC"  # bcrypt hash of "Admin@123"
+# Load environment variables from .env file
+load_dotenv()
+
+# Get admin credentials from .env file (safe, not in code!)
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH')
+
 
 def is_admin(username, password_hash):
     """Check if user is admin"""
     import bcrypt
     return username == ADMIN_USERNAME and bcrypt.checkpw(password_hash.encode('utf-8'), ADMIN_PASSWORD_HASH.encode('utf-8'))
+
 
 def get_all_users():
     """Get all users in system"""
@@ -18,6 +26,7 @@ def get_all_users():
     except Exception as e:
         print(f"Error: {str(e)}")
         return []
+
 
 def delete_user(user_id):
     """Delete a user and all their data"""
@@ -54,6 +63,7 @@ def delete_user(user_id):
         return True, "✅ User deleted successfully"
     except Exception as e:
         return False, f"❌ Error: {str(e)}"
+
 
 def get_user_details(user_id):
     """Get detailed info about a user"""
@@ -92,6 +102,7 @@ def get_user_details(user_id):
         print(f"Error: {str(e)}")
         return None
 
+
 def get_system_stats():
     """Get overall system statistics"""
     try:
@@ -124,6 +135,7 @@ def get_system_stats():
     except Exception as e:
         print(f"Error: {str(e)}")
         return {}
+
 
 def get_all_transactions():
     """Get all transactions in system"""
@@ -158,6 +170,7 @@ def get_transactions_by_user_id(user_id):
         print(f"Error fetching user transactions: {str(e)}")
         return []
 
+
 def delete_transaction(transaction_id):
     """Delete a specific transaction"""
     try:
@@ -166,6 +179,7 @@ def delete_transaction(transaction_id):
         return True, "✅ Transaction deleted"
     except Exception as e:
         return False, f"❌ Error: {str(e)}"
+
 
 def reset_user_password(user_id, new_password):
     """Reset user password (admin only)"""
